@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Akai MPK Mini MK3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1vw; 
+            overflow: hidden;
+            margin: 0;
+        }
+        /* .akai-body-wrapper is now the main container for the visual unit */
+        .akai-body-wrapper {
+            display: flex; /* Kept for centering the single child .akai-visual-unit */
+            align-items: center; 
+            justify-content: center; 
+            width: 100%;
+        }
+
+        /* Wrapper for the Akai visual unit (side panels + controller body) */
+        .akai-visual-unit {
+            background-color: #2c2c2c;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4), 0 0 0 4px #000;
+            width: 90vw; 
+            max-width: 1200px; 
+            aspect-ratio: 16 / 9;
+            max-height: 90vh; /* Controller can now use more of the viewport height */
+            display: flex;
+            align-items: stretch;
+        }
+
+        .akai-side-panel {
+            background-color: #c00000;
+            width: clamp(10px, 1.5vw, 20px); 
+            flex-shrink: 0;
+        }
+        .akai-side-panel.left { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+        .akai-side-panel.right { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+        
+        .controller-body {
+            background-color: #2c2c2c; 
+            padding: clamp(10px, 2vw, 20px); 
+            flex-grow: 1;
+            height: 100%; 
+            display: flex;
+            flex-direction: column;
+            gap: clamp(10px, 1.5vh, 15px); /* Default gap */
+            justify-content: space-between; 
+            overflow: hidden;
+        }
+
+        /* Keyboard Key Styling */
+        .keyboard-section-wrapper {
+            flex-shrink: 0; 
+        }
+        .keyboard {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            background-color: #181818;
+            padding: clamp(4px, 0.8vw, 8px);
+            border-radius: 6px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+        }
+        .key {
+            border: 1px solid #333; border-radius: 5px; cursor: pointer;
+            transition: background-color 0.1s ease, transform 0.05s ease;
+            display: flex; justify-content: center; align-items: flex-end;
+            font-size: clamp(0.5rem, 1.2vh, 0.65rem); 
+            color: #555; padding-bottom: 4px; user-select: none;
+        }
+        .key.white {
+            background-color: #f5f5f5; color: #222;
+            width: calc(100% / 15); 
+            height: clamp(100px, 25vh, 200px); /* Default height */
+            z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+        }
+        .key.black {
+            background-color: #1f1f1f; color: #ddd;
+            width: calc(100% / 15 * 0.58); /* Default width factor */
+            height: clamp(65px, 16vh, 130px); /* Default height */
+            position: absolute; z-index: 2; 
+            margin: 0 -1.7%; /* Default margin */
+            box-shadow: 0 2px 3px rgba(0,0,0,0.4), inset 0 -2px 2px rgba(255,255,255,0.05);
+        }
+        .key:active, .key.active { transform: scale(0.97); }
+        .key.white:active, .key.white.active { background-color: #e0e0e0; }
+        .key.black:active, .key.black.active { background-color: #101010; }
+
+        /* Positioning for black keys. */
+        .key.black[data-note="C#4"] { left: calc( (100% / 15) * 1 ); } 
+        .key.black[data-note="D#4"] { left: calc( (100% / 15) * 2 ); }
+        .key.black[data-note="F#4"] { left: calc( (100% / 15) * 4 ); }
+        .key.black[data-note="G#4"] { left: calc( (100% / 15) * 5 ); }
+        .key.black[data-note="A#4"] { left: calc( (100% / 15) * 6 ); }
+        .key.black[data-note="C#5"] { left: calc( (100% / 15) * (1 + 7) ); } 
+        .key.black[data-note="D#5"] { left: calc( (100% / 15) * (2 + 7) ); } 
+        .key.black[data-note="F#5"] { left: calc( (100% / 15) * (4 + 7) ); } 
+        .key.black[data-note="G#5"] { left: calc( (100% / 15) * (5 + 7) ); } 
+        .key.black[data-note="A#5"] { left: calc( (100% / 15) * (6 + 7) ); } 
+
+
+        /* --- Top Control Surface Layout --- */
+        .top-surface-container {
+            display: flex; 
+            gap: clamp(10px, 1.5vw, 20px);
+            flex-grow: 1; 
+            overflow: hidden; 
+        }
+
+        .left-stack { 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; 
+            gap: clamp(8px, 1vh, 10px);
+            width: auto; 
+            flex-shrink: 0;
+        }
+
+        .main-control-panel { 
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); 
+            gap: clamp(10px, 1.5vw, 15px);
+            background-color: #202020;
+            padding: clamp(8px, 1vw, 12px);
+            border-radius: 6px;
+        }
+        
+        .pads-column { display: flex; flex-direction: column; gap: clamp(5px, 0.5vh, 8px); }
+        .knobs-display-column { display: flex; flex-direction: column; gap: clamp(10px, 1.5vh, 20px); }
+
+
+        .control-group-horizontal { 
+            display: flex;
+            gap: clamp(4px, 0.5vw, 6px);
+            justify-content: flex-start; 
+        }
+         .control-group-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(4px, 0.5vw, 6px);
+        }
+
+        /* Drum Pad Styling */
+        .drum-pads-section { }
+        .drum-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(4px, 0.8vw, 10px); } 
+        .drum-pad {
+            background-color: #151515; border: 1px solid #000; border-radius: 6px;
+            width: 100%; 
+            aspect-ratio: 1 / 1; 
+            cursor: pointer; transition: background-color 0.1s ease, box-shadow 0.1s ease;
+            display: flex; justify-content: center; align-items: center;
+            font-size: clamp(0.6rem, 1.5vh, 0.85rem); 
+            color: #555;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5), 0 1px 1px rgba(50,50,50,0.5);
+        }
+        .drum-pad:active, .drum-pad.active {
+            background-color: #ff3333;
+            box-shadow: 0 0 12px #ff3333, 0 0 20px #ff3333, inset 0 0 8px rgba(0,0,0,0.4);
+            color: #fff; text-shadow: 0 0 5px #000;
+        }
+
+        /* Knob Styling */
+        .knobs-section { }
+        .knobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(8px, 1.5vw, 15px); } 
+        .knob-container { display: flex; flex-direction: column; align-items: center; gap: clamp(2px, 0.8vh, 6px); } 
+        .knob {
+            background-color: #383838; border: 1px solid #1a1a1a; border-radius: 50%;
+            width: clamp(30px, 6vh, 45px); 
+            height: clamp(30px, 6vh, 45px); 
+            cursor: grab; position: relative;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+        .knob:active { cursor: grabbing; }
+        .knob-indicator {
+            width: clamp(2px, 0.4vh, 4px); 
+            height: clamp(7px, 1.5vh, 12px); 
+            background-color: #b0b0b0; position: absolute;
+            top: clamp(3px, 0.6vh, 5px); 
+            left: 50%; 
+            transform-origin: 50% clamp(12px, 2.2vh, 18px); 
+            transform: translateX(-50%) rotate(0deg); border-radius: 1.5px;
+        }
+        .knob-label { font-size: clamp(0.5rem, 1vh, 0.7rem); color: #999; text-transform: uppercase; } 
+
+        /* Main Control Buttons (generic styling) */
+        .main-controls-buttons-area { 
+            display: flex;
+            flex-direction: column; 
+            gap: clamp(5px, 0.8vh, 10px); 
+        }
+        .top-row-control-buttons .control-buttons-row {
+             grid-template-columns: repeat(4, 1fr); 
+        }
+
+        .control-buttons-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(4px, 0.8vw, 8px); } 
+        .control-buttons-row.two-cols { grid-template-columns: repeat(2, 1fr); }
+        .control-button {
+            background-color: #282828; color: #bbb; border: 1px solid #111; border-radius: 4px;
+            padding: clamp(4px, 1vh, 8px) clamp(3px, 0.6vw, 6px); 
+            font-size: clamp(0.5rem, 1.1vh, 0.7rem); 
+            text-align: center; cursor: pointer;
+            transition: background-color 0.1s ease, box-shadow 0.1s ease;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.3), inset 0 1px 0px rgba(255,255,255,0.05);
+            text-transform: uppercase; 
+            min-height: clamp(20px, 4vh, 30px); 
+            display: flex; justify-content: center; align-items: center;
+        }
+        .control-button:active, .control-button.active { background-color: #444; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); color: #fff; }
+        .control-button.red-accent { background-color: #702020; color: #f0c0c0; }
+        .control-button.red-accent:active, .control-button.red-accent.active { background-color: #903030; }
+        .control-button.translucent { background-color: rgba(60, 60, 60, 0.7); border: 1px solid rgba(30,30,30,0.8); }
+        .control-button.translucent.active { background-color: rgba(255, 60, 60, 0.8); color: #fff; }
+
+        /* Joystick Styling */
+        .joystick-section { display: flex; flex-direction: column; align-items: center; gap: clamp(3px, 0.8vh, 6px); padding: clamp(6px, 1.2vh, 12px); background-color: #202020; border-radius:6px;} 
+        .joystick {
+            width: clamp(45px, 8vh, 65px); 
+            height: clamp(45px, 8vh, 65px); 
+            background-color: #ff3333; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; cursor: grab;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 0 8px rgba(0,0,0,0.4);
+            border: 2px solid #a00000;
+        }
+        .joystick-handle { width: clamp(15px, 3vh, 25px); height: clamp(15px, 3vh, 25px); background-color: #111; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.5); } 
+        .joystick-label { font-size: clamp(0.5rem, 1vh, 0.7rem); color: #888; text-transform: uppercase;} 
+
+        /* Arpeggiator Controls */
+        .arp-controls-section { padding: clamp(6px, 1.2vh, 12px); background-color: #202020; border-radius:6px; } 
+        .arp-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(4px, 0.8vw, 8px); } 
+
+        /* Branding */
+        .branding { text-align: left; padding: clamp(3px, 0.5vh, 5px) 0; margin-top: auto; }
+        .brand-logo { font-size: clamp(0.8rem, 1.8vh, 1.1rem); font-weight: 700; color: #e0e0e0; line-height: 1; }
+        .brand-model { font-size: clamp(0.6rem, 1.2vh, 0.8rem); font-weight: 500; color: #a0a0a0; letter-spacing: 0.5px;}
+
+        /* Display Screen & Top Buttons Row */
+        .top-display-and-buttons-row {
+            display: flex;
+            align-items: center; 
+            gap: clamp(8px, 1vw, 12px); 
+        }
+        .display-screen-section { 
+            flex-shrink: 0; 
+        }
+        .knobs-display-column .top-row-control-buttons { 
+            flex-grow: 1; 
+            flex-direction: row; 
+        }
+        .display-screen {
+            background-color: #102044; border: 1px solid #081022; border-radius: 3px;
+            height: clamp(25px, 4.5vh, 40px); 
+            min-width: clamp(60px, 12vw, 100px); 
+            padding: 5px 8px; font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(0.7rem, 1.6vh, 1rem); 
+            color: #77ccff; display: flex; align-items: center;
+            justify-content: flex-end; box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+            overflow: hidden; white-space: nowrap; 
+        }
+        .display-label { font-size: clamp(0.5rem, 1vh, 0.7rem); color: #777; text-align: center; margin-bottom: 3px; text-transform: uppercase;} 
+        
+        .section-title {
+            font-size: clamp(0.6rem, 1.2vh, 0.85rem); 
+            color: #888; margin-bottom: clamp(4px, 1vh, 10px); 
+            text-align: center; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        #message-area {
+            font-size: clamp(0.7rem, 1.2vh, 0.8rem); min-height: clamp(18px, 3vh, 24px); padding: 5px;
+            background-color: #202020; border-radius: 4px; 
+            flex-shrink: 0; 
+            text-align: center;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 700px) { 
+            .akai-visual-unit { max-height: 90vh; } /* Allow full height on small screens */
+            .controller-body { padding: 10px; gap: 8px;}
+            .top-surface-container { flex-direction: column; } 
+            .main-control-panel { grid-template-columns: 1fr; } 
+            .key.white { height: clamp(90px, 15vh, 120px); } 
+            .key.black { height: clamp(60px, 10vh, 75px); } 
+            .drum-pads { grid-template-columns: repeat(2, 1fr); } 
+            .top-display-and-buttons-row { flex-direction: column; align-items: stretch; } 
+            .knobs-display-column .top-row-control-buttons .control-buttons-row { grid-template-columns: repeat(2,1fr); } 
+            .knob { width: clamp(30px, 5vh, 38px); height: clamp(30px, 5vh, 38px); } 
+            .knob-indicator { width: clamp(2px, 0.3vh, 3px); height: clamp(7px, 1.2vh, 10px); top: clamp(3px, 0.5vh, 4px); transform-origin: 50% clamp(12px, 2vh, 15px); }
+            .knob-label { font-size: clamp(0.5rem, 0.8vh, 0.6rem); }
+            .control-button { padding: clamp(4px, 0.8vh, 6px) clamp(3px, 0.5vw, 5px); font-size: clamp(0.5rem, 0.9vh, 0.6rem); min-height: clamp(20px, 3.5vh, 26px); } 
+        }
+    </style>
+</head>
+<body>
+    <div class="akai-body-wrapper">
+        <div class="akai-visual-unit">
+            <div class="akai-side-panel left"></div>
+            <div class="controller-body">
+                <div class="top-surface-container">
+                    <div class="left-stack">
+                        <div class="joystick-section">
+                            <div class="joystick" id="joystick"><div class="joystick-handle"></div></div>
+                            <span class="joystick-label">X-Y Controller</span>
+                        </div>
+                        <div class="arp-controls-section">
+                            <div class="section-title">Arpeggiator</div>
+                            <div class="arp-buttons">
+                                <button class="control-button translucent" id="btn-arp-onoff">On/Off</button>
+                                <button class="control-button translucent" id="btn-arp-latch">Latch</button>
+                            </div>
+                        </div>
+                         <div class="branding">
+                            <div class="brand-logo">AKAI <span class="font-light">PROFESSIONAL</span></div>
+                            <div class="brand-model">MPK mini</div>
+                        </div>
+                    </div>
+
+                    <div class="main-control-panel">
+                        <div class="pads-column">
+                            <div class="control-group-horizontal">
+                                <button class="control-button flex-1" id="btn-full-level">Full Lvl</button>
+                                <button class="control-button red-accent flex-1" id="btn-note-repeat">Note Rpt</button>
+                            </div>
+                            <div class="drum-pads-section">
+                                <div class="section-title">Pads <span class="text-xs text-gray-500">(A/B)</span></div>
+                                <div class="drum-pads">
+                                    <div class="drum-pad" data-pad-id="1">P1</div> <div class="drum-pad" data-pad-id="2">P2</div>
+                                    <div class="drum-pad" data-pad-id="3">P3</div> <div class="drum-pad" data-pad-id="4">P4</div>
+                                    <div class="drum-pad" data-pad-id="5">P5</div> <div class="drum-pad" data-pad-id="6">P6</div>
+                                    <div class="drum-pad" data-pad-id="7">P7</div> <div class="drum-pad" data-pad-id="8">P8</div>
+                                </div>
+                            </div>
+                            </div>
+
+                        <div class="knobs-display-column">
+                            <div class="top-display-and-buttons-row">
+                                <div class="display-screen-section">
+                                     <div class="display-label">Info</div>
+                                     <div class="display-screen" id="display">MPK MINI</div>
+                                </div>
+                                <div class="main-controls-buttons-area top-row-control-buttons"> 
+                                    <div class="control-buttons-row"> 
+                                        <button class="control-button" id="btn-tap-tempo">Tap Tempo</button>
+                                        <button class="control-button" id="btn-bank-ab">Bank A/B</button>
+                                        <button class="control-button" id="btn-prog-change">Prog Chg</button>
+                                        <button class="control-button" id="btn-cc">CC</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="knobs-section">
+                                <div class="section-title">Assignable Knobs</div>
+                                <div class="knobs">
+                                    <div class="knob-container"><div class="knob" data-knob-id="1"><div class="knob-indicator"></div></div><span class="knob-label">K1</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="2"><div class="knob-indicator"></div></div><span class="knob-label">K2</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="3"><div class="knob-indicator"></div></div><span class="knob-label">K3</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="4"><div class="knob-indicator"></div></div><span class="knob-label">K4</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="5"><div class="knob-indicator"></div></div><span class="knob-label">K5</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="6"><div class="knob-indicator"></div></div><span class="knob-label">K6</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="7"><div class="knob-indicator"></div></div><span class="knob-label">K7</span></div>
+                                    <div class="knob-container"><div class="knob" data-knob-id="8"><div class="knob-indicator"></div></div><span class="knob-label">K8</span></div>
+                                </div>
+                            </div>
+                            <div class="main-controls-buttons-area"> 
+                                 <div class="control-buttons-row">
+                                    <button class="control-button" id="btn-oct-down">Oct -</button>
+                                    <button class="control-button" id="btn-oct-up">Oct +</button>
+                                    <button class="control-button" id="btn-arp-oct-down">Arp Oct-</button> 
+                                    <button class="control-button" id="btn-arp-oct-up">Arp Oct+</button> 
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="keyboard-section-wrapper">
+                    <div class="keyboard">
+                        <div class="key white" data-note="C4">C4</div> <div class="key black" data-note="C#4">C#</div>
+                        <div class="key white" data-note="D4">D4</div> <div class="key black" data-note="D#4">D#</div>
+                        <div class="key white" data-note="E4">E4</div>
+                        <div class="key white" data-note="F4">F4</div> <div class="key black" data-note="F#4">F#</div>
+                        <div class="key white" data-note="G4">G4</div> <div class="key black" data-note="G#4">G#</div>
+                        <div class="key white" data-note="A4">A4</div> <div class="key black" data-note="A#4">A#</div>
+                        <div class="key white" data-note="B4">B4</div>
+                        <div class="key white" data-note="C5">C5</div> <div class="key black" data-note="C#5">C#</div>
+                        <div class="key white" data-note="D5">D5</div> <div class="key black" data-note="D#5">D#</div>
+                        <div class="key white" data-note="E5">E5</div>
+                        <div class="key white" data-note="F5">F5</div> <div class="key black" data-note="F#5">F#</div>
+                        <div class="key white" data-note="G5">G5</div> <div class="key black" data-note="G#5">G#</div>
+                        <div class="key white" data-note="A5">A5</div> <div class="key black" data-note="A#5">A#</div>
+                        <div class="key white" data-note="B5">B5</div>
+                        <div class="key white" data-note="C6">C6</div>
+                    </div>
+                </div>
+
+                <div id="message-area">
+                    </div>
+            </div>
+            <div class="akai-side-panel right"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Tone.js Synthesizer Setup ---
+        let synth;
+        let audioContextStarted = false;
+        const displayEl = document.getElementById('display');
+        const messageArea = document.getElementById('message-area');
+        // const root = document.documentElement; // No longer needed for debug sliders
+
+        async function initializeAudio() {
+            if (audioContextStarted) return;
+            try {
+                await Tone.start();
+                synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "sawtooth" },
+                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.3 },
+                    volume: -12 
+                }).toDestination();
+                audioContextStarted = true;
+                console.log("AudioContext started and synth initialized.");
+                if (messageArea.textContent.trim() === '') { 
+                    messageArea.textContent = 'Audio ready. Play some notes!';
+                }
+            } catch (e) {
+                console.error("Error starting Tone.js or creating synth:", e);
+                messageArea.textContent = 'Error initializing audio. Click or refresh.';
+            }
+        }
+        
+        // --- Keyboard Interaction ---
+        const keys = document.querySelectorAll('.key');
+        let currentOctave = 4; 
+
+        function getNoteWithOctave(baseNoteFull, octaveShift) {
+            const noteName = baseNoteFull.slice(0, -1); 
+            const originalKeyOctave = parseInt(baseNoteFull.slice(-1)); 
+            const targetOctave = octaveShift + (originalKeyOctave - 4); 
+            return noteName + targetOctave;
+        }
+
+        keys.forEach(key => {
+            const baseNote = key.dataset.note; 
+            key.addEventListener('mousedown', async (e) => {
+                e.preventDefault(); 
+                if (!audioContextStarted) await initializeAudio();
+                if (!synth) {
+                     console.warn("Synth not ready."); messageArea.textContent = 'Synth not ready.'; return;
+                }
+                const noteToPlay = getNoteWithOctave(baseNote, currentOctave);
+                try {
+                    synth.triggerAttack(noteToPlay, Tone.now());
+                    key.classList.add('active');
+                    console.log(`Key down: ${noteToPlay}`);
+                    displayEl.textContent = `N: ${noteToPlay}`; 
+                } catch (err) { console.error("Error playing note:", err); messageArea.textContent = `Error: ${noteToPlay}`; }
+            });
+            key.addEventListener('mouseup', () => {
+                if (!synth) return;
+                const noteToPlay = getNoteWithOctave(baseNote, currentOctave);
+                try {
+                    synth.triggerRelease(noteToPlay, Tone.now() + 0.05);
+                    key.classList.remove('active');
+                } catch (err) { console.error("Error releasing note:", err); }
+            });
+            key.addEventListener('mouseleave', () => { 
+                if (key.classList.contains('active')) {
+                     if (!synth) return;
+                     const noteToPlay = getNoteWithOctave(baseNote, currentOctave);
+                     try { synth.triggerRelease(noteToPlay, Tone.now() + 0.05); } catch (e) { /* ignore */ }
+                     key.classList.remove('active');
+                }
+            });
+        });
+
+        // --- Drum Pad Interaction ---
+        const drumPads = document.querySelectorAll('.drum-pad');
+        drumPads.forEach(pad => {
+            pad.addEventListener('mousedown', async (e) => {
+                e.preventDefault();
+                if (!audioContextStarted) await initializeAudio();
+                pad.classList.add('active');
+                const padId = pad.dataset.padId;
+                console.log(`Pad ${padId} pressed`);
+                messageArea.textContent = `Pad ${padId} pressed`;
+                displayEl.textContent = `PAD ${padId.slice(-1)}`; 
+                if (synth) {
+                     try {
+                        const padNote = Tone.Frequency(`C${1 + parseInt(padId)}`).toNote(); 
+                        synth.triggerAttackRelease(padNote, "16n", Tone.now());
+                     } catch (err) { console.error("Error playing pad sound:", err); }
+                }
+            });
+            pad.addEventListener('mouseup', () => pad.classList.remove('active'));
+            pad.addEventListener('mouseleave', () => pad.classList.remove('active'));
+        });
+
+        // --- Knob Interaction ---
+        const knobs = document.querySelectorAll('.knob');
+        let activeKnobElement = null; 
+        let knobInitialY = 0;
+        let knobInitialAngle = 0;
+
+        knobs.forEach(knob => {
+            const indicator = knob.querySelector('.knob-indicator');
+            let knobCurrentAngle = 0; 
+            Object.defineProperty(knob, 'currentAngleValue', {
+                get: () => knobCurrentAngle,
+                set: (angle) => {
+                    knobCurrentAngle = Math.max(-150, Math.min(150, angle)); 
+                    indicator.style.transform = `translateX(-50%) rotate(${knobCurrentAngle}deg)`;
+                    const knobValue = Math.round(((knobCurrentAngle + 150) / 300) * 127); 
+                    if (activeKnobElement === knob) { 
+                        displayEl.textContent = `K${knob.dataset.knobId}: ${knobValue}`;
+                        messageArea.textContent = `Knob ${knob.dataset.knobId}: ${knobValue}`;
+                    }
+                }
+            });
+            knob.currentAngleValue = 0; 
+
+            knob.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                activeKnobElement = knob;
+                knobInitialY = e.clientY;
+                knobInitialAngle = knob.currentAngleValue;
+                document.body.style.cursor = 'grabbing';
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!activeKnobElement) return;
+            e.preventDefault();
+            const deltaY = knobInitialY - e.clientY; 
+            activeKnobElement.currentAngleValue = knobInitialAngle + deltaY * 1.2; 
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (activeKnobElement) {
+                activeKnobElement = null;
+                document.body.style.cursor = 'default';
+            }
+        });
+
+        // --- Control Button Interaction ---
+        const controlButtons = document.querySelectorAll('.control-button');
+        controlButtons.forEach(button => {
+            button.addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (!audioContextStarted && (button.id === 'btn-oct-down' || button.id === 'btn-oct-up')) {
+                    await initializeAudio();
+                }
+
+                const isToggleable = ['btn-arp-onoff', 'btn-arp-latch', 'btn-full-level', 'btn-note-repeat'].includes(button.id);
+                if (isToggleable) {
+                    button.classList.toggle('active');
+                } else {
+                    button.classList.add('active');
+                    setTimeout(() => button.classList.remove('active'), 150);
+                }
+                
+                const buttonText = button.textContent.trim();
+                console.log(`Ctrl btn ${button.id} clicked. Active: ${button.classList.contains('active')}`);
+                messageArea.textContent = `Button: ${buttonText}`;
+                displayEl.textContent = buttonText.length > 7 ? buttonText.substring(0,7)+"." : buttonText;
+
+
+                if (button.id === 'btn-oct-down') {
+                    currentOctave = Math.max(0, currentOctave - 1);
+                    messageArea.textContent = `Octave: ${currentOctave}`;
+                    displayEl.textContent = `OCT: ${currentOctave}`;
+                    updateKeyLabels();
+                } else if (button.id === 'btn-oct-up') {
+                    currentOctave = Math.min(8, currentOctave + 1);
+                    messageArea.textContent = `Octave: ${currentOctave}`;
+                    displayEl.textContent = `OCT: ${currentOctave}`;
+                    updateKeyLabels();
+                } else if (button.id === 'btn-bank-ab') {
+                    messageArea.textContent = `Pad Bank toggled`; 
+                    displayEl.textContent = `PAD BANK`;
+                }
+            });
+        });
+
+        function updateKeyLabels() {
+            keys.forEach(key => {
+                const baseNoteFull = key.dataset.note; 
+                const noteName = baseNoteFull.slice(0, -1); 
+                const originalKeyOctave = parseInt(baseNoteFull.slice(-1)); 
+                const displayOctave = currentOctave + (originalKeyOctave - 4);
+                
+                if (key.classList.contains('black')) {
+                    key.textContent = noteName; 
+                } else {
+                    key.textContent = noteName + displayOctave;
+                }
+            });
+            console.log("Key labels updated for global octave:", currentOctave);
+        }
+
+        // Debug Sliders Logic Removed
+        // function setupDebugSliders() { ... } 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateKeyLabels(); 
+            // setupDebugSliders(); // Call removed
+            document.body.addEventListener('click', initializeAudio, { once: true });
+            document.body.addEventListener('touchstart', initializeAudio, { once: true });
+            
+            console.log("Virtual Akai MPK Mini controller initialized.");
+            messageArea.textContent = ''; 
+            displayEl.textContent = "MPK MINI"; 
+        });
+
+        // --- Joystick (Visual Only for now, refined) ---
+        const joystick = document.getElementById('joystick');
+        const joystickHandle = joystick.querySelector('.joystick-handle');
+        let isDraggingJoystick = false;
+
+        joystick.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isDraggingJoystick = true;
+            joystick.style.cursor = 'grabbing';
+            messageArea.textContent = `Joystick active.`;
+            displayEl.textContent = `X-Y`;
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDraggingJoystick) return;
+            e.preventDefault();
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let x = e.clientX - centerX;
+            let y = e.clientY - centerY;
+            const maxDistance = rect.width / 2 - joystickHandle.offsetWidth / 2;
+            const distance = Math.sqrt(x * x + y * y);
+            if (distance > maxDistance) {
+                x = (x / distance) * maxDistance;
+                y = (y / distance) * maxDistance;
+            }
+            joystickHandle.style.transform = `translate(${x}px, ${y}px)`;
+        });
+        document.addEventListener('mouseup', (e) => {
+            if (isDraggingJoystick) {
+                isDraggingJoystick = false;
+                joystick.style.cursor = 'grab';
+            }
+        });
+
+    </script>
+</body>
+</html>
